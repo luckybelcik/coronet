@@ -38,7 +38,7 @@
 
 @plugin "daisyui/theme" {
     name: "greed";
-    default: false;
+    default: true;
     prefersdark: false;
     color-scheme: "dark";
     --color-base-100: oklch(20.219% 0.004 308.229);
@@ -99,4 +99,9 @@ body,
 
 .sono {
     font-family: "Sono", sans-serif;
+}
+
+img,
+.atlas-preview {
+    image-rendering: pixelated;
 }

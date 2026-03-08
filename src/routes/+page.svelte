@@ -35,7 +35,7 @@
         </div>
         <ul
             tabindex="-1"
-            class="dropdown-content menu rounded-box z-1 p-0 w-28.5 shadow-sm border border-base-300 bg-base-200"
+            class="dropdown-content menu rounded-box z-1 p-0 w-28.5 mt-2 shadow-sm border border-base-300 bg-base-200"
         >
             {#each projectNames as name}
                 <li>
