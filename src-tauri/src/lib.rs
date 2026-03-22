@@ -1,7 +1,6 @@
 use engine_assets::{projects::Project, AssetManager};
 use engine_core::paths::init_data_path;
-use image::EncodableLayout;
-use image::ImageFormat;
+use image::{DynamicImage, GenericImage, GenericImageView, ImageFormat, Rgba};
 use std::io::Cursor;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -9,7 +8,7 @@ use tauri::Manager;
 struct LoadedProject {
     project: Project,
     assets: AssetManager,
-    cached_atlas_bytes: Vec<u8>,
+    rendered_images: Vec<DynamicImage>,
 }
 
 struct EngineState {
@@ -37,19 +36,27 @@ pub fn run() {
             let uri = request.uri();
             let path = uri.path();
 
-            println!("Full URI: {:?}", uri);
-            println!("Path: {:?}", path);
-
             let state = app.app_handle().state::<EngineState>();
             let current_lock = state.current_project.lock().unwrap();
 
-            if path.ends_with("block_atlas.png") {
-                if let Some(loaded_project) = current_lock.as_ref() {
-                    return tauri::http::Response::builder()
-                        .header("Content-Type", "image/png")
-                        .status(200)
-                        .body(loaded_project.cached_atlas_bytes.clone())
-                        .unwrap();
+            if let Some(loaded_project) = current_lock.as_ref() {
+                if uri.to_string().starts_with("engine-asset://blocks/") {
+                    let index = path
+                        .split('/')
+                        .last()
+                        .unwrap()
+                        .parse::<usize>()
+                        .unwrap_or(0);
+                    if let Some(img) = loaded_project.rendered_images.get(index) {
+                        let mut buffer = Cursor::new(Vec::new());
+                        if img.write_to(&mut buffer, ImageFormat::Png).is_ok() {
+                            return tauri::http::Response::builder()
+                                .header("Content-Type", "image/png")
+                                .status(200)
+                                .body(buffer.into_inner())
+                                .unwrap();
+                        }
+                    }
                 }
             }
 
@@ -76,22 +83,27 @@ fn load_project(state: tauri::State<'_, EngineState>, project_name: String) -> R
         .cloned()
         .ok_or_else(|| "Project not found".to_string())?;
 
-    let assets = AssetManager::init(Some(vec![project.name.clone()]), false);
+    let assets: AssetManager = AssetManager::init(Some(vec![project.name.clone()]), false, true).0;
 
-    let mut buffer = Cursor::new(Vec::new());
+    let mut blocks = assets.block_registry.get_all_blocks();
+    blocks.sort_by_key(|block| *block.1); // sort by block id
 
-    assets
-        .block_atlas
-        .write_to(&mut buffer, ImageFormat::Png)
-        .map_err(|e| format!("Failed to encode atlas: {}", e))?;
+    let mut rendered_images = Vec::new();
 
-    let cached_atlas_bytes = buffer.into_inner();
+    for block in blocks {
+        if *block.1 == 0 {
+            continue;
+        }
+
+        let image = render_block_image(&assets, *block.1);
+        rendered_images.push(image);
+    }
 
     let mut current = state.current_project.lock().unwrap();
     *current = Some(LoadedProject {
         project,
         assets,
-        cached_atlas_bytes,
+        rendered_images,
     });
 
     Ok(())
@@ -109,27 +121,133 @@ fn get_block_names(state: tauri::State<'_, EngineState>) -> Vec<String> {
 }
 
 #[tauri::command]
-fn get_blocks_with_preview(state: tauri::State<'_, EngineState>) -> Vec<(String, u16, u32, u32)> {
+fn get_blocks_with_preview(state: tauri::State<'_, EngineState>) -> Vec<(String, u16, u32)> {
     let current = &state.current_project.lock().unwrap();
     if let Some(loaded_project) = current.as_ref() {
         let assets = &loaded_project.assets;
-        let atlas_dim = (assets.block_atlas.width() / 16) as u32;
 
-        assets
-            .block_registry
-            .get_all_blocks()
+        let mut blocks = assets.block_registry.get_all_blocks();
+        blocks.sort_by_key(|block| *block.1); // sort by block id
+
+        blocks[1..] // exclude air by slicing it out
             .iter()
             .map(|(name, id)| {
-                let face_index = ((*id + 1) * 6) + 2;
-                let atlas_index = assets.texture_mapping_table[face_index as usize];
+                let face_index = (*id) * 6;
+                let face_metadata = assets.metadata_table[(face_index - 6) as usize];
+                let atlas_index;
+                // variant bit
+                if face_metadata.additional_meta & 1 == 0 {
+                    atlas_index = assets.texture_mapping_table[face_index as usize];
+                } else {
+                    let variant_data = assets.texture_mapping_table[face_index as usize];
+                    let offset = variant_data & 0x0FFFFFFF;
+                    atlas_index = assets.texture_variant_mapping_table[offset as usize];
+                }
 
-                let u = (atlas_index % atlas_dim) * 16;
-                let v = (atlas_index / atlas_dim) * 16;
-
-                ((*name).clone(), (**id + 1), u, v)
+                ((*name).clone(), (**id), atlas_index)
             })
             .collect()
     } else {
         Vec::new()
     }
+}
+
+fn render_block_image(assets: &AssetManager, block_id: u16) -> DynamicImage {
+    let face_index = block_id * 6;
+    let face_metadata = assets.metadata_table[(face_index - 6) as usize];
+    let atlas_index;
+    // block variant bit
+    if face_metadata.additional_meta & 1 == 0 {
+        atlas_index = assets.texture_mapping_table[face_index as usize];
+    } else {
+        let variant_data = assets.texture_mapping_table[face_index as usize];
+        let offset = variant_data & 0x0FFFFFFF;
+        atlas_index = assets.texture_variant_mapping_table[offset as usize];
+    }
+
+    let mask_index;
+    // mask variant bit
+    if face_metadata.additional_meta & 2 == 0 {
+        mask_index = face_metadata.mask_atlas_id;
+    } else {
+        let variant_data = face_metadata.mask_atlas_id;
+        let offset = variant_data & 0x0FFFFFFF;
+        mask_index = assets.colormap_mask_variant_mapping_table[offset as usize];
+    }
+
+    let mut image;
+    if let Some(blocks) = &assets.active_block_textures {
+        image = blocks[atlas_index as usize].clone();
+    } else {
+        image = DynamicImage::new_rgb8(16, 16);
+    }
+
+    if let Some(masks) = &assets.active_colormap_masks_textures {
+        if mask_index > 0 {
+            if let Some(colormaps) = &assets.active_colormap_textures {
+                let mask: &DynamicImage = &masks[mask_index.saturating_sub(1) as usize];
+                let colormap_0_id = face_metadata.packed_colormap_ids & 0x7FF;
+                let colormap_1_id = (face_metadata.packed_colormap_ids >> 11) & 0x7FF;
+                let colormap_2_id = (face_metadata.packed_colormap_ids >> 22) & 0x3FF;
+                let colormap_0 = &colormaps.get(colormap_0_id.saturating_sub(1) as usize);
+                let colormap_1 = &colormaps.get(colormap_1_id.saturating_sub(1) as usize);
+                let colormap_2 = &colormaps.get(colormap_2_id.saturating_sub(1) as usize);
+                for y in 0..16 {
+                    for x in 0..16 {
+                        let mask_pixel = mask.get_pixel(x, y);
+                        let weight_0 = (((mask_pixel[0] as u32 & 7) * 255) / 7) as u8;
+                        let weight_1 = ((((mask_pixel[0] >> 3) as u32 & 7) * 255) / 7) as u8;
+                        let weight_2 = ((((mask_pixel[0] >> 6) as u32 & 3) * 255) / 3) as u8;
+
+                        let mut color = image.get_pixel(x, y);
+                        if let Some(colormap_0) = colormap_0 {
+                            let second_color = multiply_colors_u8(
+                                color,
+                                colormap_0.get_pixel(((x + 1) * 8) - 1, (y + 1 * 8) - 1),
+                            );
+                            color = mix_colors_u8(color, second_color, weight_0)
+                        }
+                        if let Some(colormap_1) = colormap_1 {
+                            let second_color = multiply_colors_u8(
+                                color,
+                                colormap_1.get_pixel(((x + 1) * 8) - 1, (y + 1 * 8) - 1),
+                            );
+                            color = mix_colors_u8(color, second_color, weight_1)
+                        }
+                        if let Some(colormap_2) = colormap_2 {
+                            let second_color = multiply_colors_u8(
+                                color,
+                                colormap_2.get_pixel(((x + 1) * 8) - 1, (y + 1 * 8) - 1),
+                            );
+                            color = mix_colors_u8(color, second_color, weight_2)
+                        }
+                        image.put_pixel(x, y, color);
+                    }
+                }
+            }
+        }
+    }
+
+    image
+}
+
+fn multiply_colors_u8(c1: Rgba<u8>, c2: Rgba<u8>) -> Rgba<u8> {
+    Rgba::<u8>::from([
+        ((c1[0] as u32 * c2[0] as u32) / 255) as u8,
+        ((c1[1] as u32 * c2[1] as u32) / 255) as u8,
+        ((c1[2] as u32 * c2[2] as u32) / 255) as u8,
+        ((c1[3] as u32 * c2[3] as u32) / 255) as u8,
+    ])
+}
+
+fn mix_colors_u8(c1: Rgba<u8>, c2: Rgba<u8>, mask: u8) -> Rgba<u8> {
+    let m = mask as u32;
+    let inv_m = 255 - m;
+
+    Rgba::<u8>::from([
+        ((c1[0] as u32 * inv_m + c2[0] as u32 * m) / 255) as u8,
+        ((c1[1] as u32 * inv_m + c2[1] as u32 * m) / 255) as u8,
+        ((c1[2] as u32 * inv_m + c2[2] as u32 * m) / 255) as u8,
+        ((c1[3] as u32 * inv_m + c2[3] as u32 * m) / 255) as u8,
+    ])
 }

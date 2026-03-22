@@ -1,3 +1,5 @@
+cargo-features = ["codegen-backend", "profile-rustflags"]
+
 [package]
 name = "coronet"
 version = "0.1.0"
@@ -34,3 +36,11 @@ nalgebra-glm = { version = "0.20.0", features = [
     "convert-bytemuck",
     "serde-serialize",
 ] }
+
+[profile.dev]
+strip = "debuginfo"
+rustflags = ["-Z", "threads=8", "-C", "link-arg=-no-pie"]
+codegen-units = 512
+incremental = true
+opt-level = 0
+codegen-backend = "cranelift"
