@@ -2,11 +2,30 @@
     import { fileStore } from '../../../lib/fileStore.svelte';
     import { invoke } from "@tauri-apps/api/core";
     import { getSingletonHighlighter, type Highlighter } from 'shiki';
+  import { onMount } from 'svelte';
 
     let highlighter: Highlighter | undefined = $state();
     let highlightedCode = $state("");
 
-    getSingletonHighlighter({ themes: ['ayu-dark'], langs: ['toml'] }).then(h => highlighter = h);
+    onMount(async () => {
+        highlighter = await getSingletonHighlighter({ themes: ['ayu-dark'], langs: ['toml'] }).then(h => highlighter = h);
+        if (fileStore.content) {
+            const code = fileStore.content;
+            if (highlighter) {
+                highlightedCode = await highlighter.codeToHtml(code, {
+                    lang: 'toml',
+                    theme: 'ayu-dark',
+                    transformers: [
+                        {
+                            pre(node) {
+                                node.properties.style = ""; 
+                            }
+                        }
+                    ]
+                });
+            }
+        }
+    })
     
     let timeout: number | undefined;
 

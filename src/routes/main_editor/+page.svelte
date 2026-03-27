@@ -5,7 +5,7 @@
     import { goto } from '$app/navigation';
 
     let raw_blocks: [string, number, number, string][] = [];
-    let blocks: { name: string; id: number; atlas_id: number, manifest_path: string }[] = [];
+    let blocks: { name: string; id: number; atlas_id: number, manifest_path: string }[] = $state([]);
 
     onMount(async () => {
         raw_blocks = await invoke("get_blocks_with_preview");
@@ -26,19 +26,29 @@
             console.error(error);
         }
     };
+
+    let windowWidth = $state(0);
+
+    $effect(() => {
+        if (windowWidth) {
+        }
+    });
 </script>
+
+<!--we need do to this to force a layout change bc of the dumb collapse thingy every time the window changes size-->
+<svelte:window bind:innerWidth={windowWidth} />
 
 <div class="flex-1 mt-8 bg-base-100 select-none">
     <div class="collapse collapse-arrow border border-base-content/20 mt-2">
         <input type="checkbox" />
         <div class="collapse-title">Blocks</div>
         <div
-            class="grid gap-3 collapse-content"
+            class="grid gap-3 collapse-content items-start"
             style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));"
         >
             {#each blocks as block}
                 <button
-                    class="relative border border-base-content/40 rounded-xl flex"
+                    class="relative border border-base-content/40 rounded-xl flex h-18"
                     onclick={() => loadManifest(block.manifest_path)}
                 >
                     <div class="h-full w-18 rounded-xl z-9" style="background-image: url('engine-asset://blocks/{block.id - 1}'); background-size: 4.5rem; image-rendering: pixelated;">
