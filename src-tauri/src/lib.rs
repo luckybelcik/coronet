@@ -83,7 +83,7 @@ fn load_project(state: tauri::State<'_, EngineState>, project_name: String) -> R
         .cloned()
         .ok_or_else(|| "Project not found".to_string())?;
 
-    let assets: AssetManager = AssetManager::init(Some(vec![project.name.clone()]), false, true).0;
+    let assets: AssetManager = AssetManager::init(Some(vec![project.name.clone()]), false, true)?.0;
 
     let mut blocks = assets.block_registry.get_all_blocks();
     blocks.sort_by_key(|block| *block.1); // sort by block id
@@ -177,7 +177,7 @@ fn render_block_image(assets: &AssetManager, block_id: u16) -> DynamicImage {
 
     let mut image;
     if let Some(blocks) = &assets.active_block_textures {
-        image = blocks[atlas_index as usize].clone();
+        image = image::load_from_memory_with_format(&blocks[atlas_index as usize], ImageFormat::Qoi).unwrap(); // QOI format here
     } else {
         image = DynamicImage::new_rgb8(16, 16);
     }
@@ -185,13 +185,14 @@ fn render_block_image(assets: &AssetManager, block_id: u16) -> DynamicImage {
     if let Some(masks) = &assets.active_colormap_masks_textures {
         if mask_index > 0 {
             if let Some(colormaps) = &assets.active_colormap_textures {
-                let mask: &DynamicImage = &masks[mask_index.saturating_sub(1) as usize];
+                let mask: DynamicImage = image::load_from_memory_with_format(&masks[mask_index.saturating_sub(1) as usize], ImageFormat::Png).unwrap(); // PNG format here bc its grayscale
                 let colormap_0_id = face_metadata.packed_colormap_ids & 0x7FF;
                 let colormap_1_id = (face_metadata.packed_colormap_ids >> 11) & 0x7FF;
                 let colormap_2_id = (face_metadata.packed_colormap_ids >> 22) & 0x3FF;
-                let colormap_0 = &colormaps.get(colormap_0_id.saturating_sub(1) as usize);
-                let colormap_1 = &colormaps.get(colormap_1_id.saturating_sub(1) as usize);
-                let colormap_2 = &colormaps.get(colormap_2_id.saturating_sub(1) as usize);
+                // colormaps in QOI
+                let colormap_0: Option<DynamicImage> = if let Some(bytes) = &colormaps.get(colormap_0_id.saturating_sub(1) as usize) { image::load_from_memory_with_format(bytes, ImageFormat::Qoi).ok() } else { None };
+                let colormap_1: Option<DynamicImage> = if let Some(bytes) = &colormaps.get(colormap_1_id.saturating_sub(1) as usize) { image::load_from_memory_with_format(bytes, ImageFormat::Qoi).ok() } else { None };
+                let colormap_2: Option<DynamicImage> = if let Some(bytes) = &colormaps.get(colormap_2_id.saturating_sub(1) as usize) { image::load_from_memory_with_format(bytes, ImageFormat::Qoi).ok() } else { None };
                 for y in 0..16 {
                     for x in 0..16 {
                         let mask_pixel = mask.get_pixel(x, y);
@@ -200,21 +201,21 @@ fn render_block_image(assets: &AssetManager, block_id: u16) -> DynamicImage {
                         let weight_2 = ((((mask_pixel[0] >> 6) as u32 & 3) * 255) / 3) as u8;
 
                         let mut color = image.get_pixel(x, y);
-                        if let Some(colormap_0) = colormap_0 {
+                        if let Some(colormap_0) = &colormap_0 {
                             let second_color = multiply_colors_u8(
                                 color,
                                 colormap_0.get_pixel(((x + 1) * 8) - 1, (y + 1 * 8) - 1),
                             );
                             color = mix_colors_u8(color, second_color, weight_0)
                         }
-                        if let Some(colormap_1) = colormap_1 {
+                        if let Some(colormap_1) = &colormap_1 {
                             let second_color = multiply_colors_u8(
                                 color,
                                 colormap_1.get_pixel(((x + 1) * 8) - 1, (y + 1 * 8) - 1),
                             );
                             color = mix_colors_u8(color, second_color, weight_1)
                         }
-                        if let Some(colormap_2) = colormap_2 {
+                        if let Some(colormap_2) = &colormap_2 {
                             let second_color = multiply_colors_u8(
                                 color,
                                 colormap_2.get_pixel(((x + 1) * 8) - 1, (y + 1 * 8) - 1),
