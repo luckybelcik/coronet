@@ -19,7 +19,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' engine-asset: asset: https://tauri.localhost; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline';"
+      "csp": "default-src 'self'; img-src 'self' https: engine-asset: asset: https://tauri.localhost; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; ipc.localhost http://ipc.localhost;"
     }
   },
   "bundle": {

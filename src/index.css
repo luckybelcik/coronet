@@ -1,14 +1,15 @@
 @import "tailwindcss";
 @plugin "daisyui";
+@tailwind utilities;
 
 @plugin "daisyui/theme" {
-    name: "coronet";
+    name: "greed";
     default: true;
     prefersdark: false;
     color-scheme: "dark";
-    --color-base-100: oklch(12.5% 0.028 20.7);
-    --color-base-200: oklch(14% 0.104 55.4);
-    --color-base-300: oklch(34.6% 0.11 32.6);
+    --color-base-100: oklch(20.219% 0.004 308.229);
+    --color-base-200: oklch(23.2% 0.008 308.229);
+    --color-base-300: oklch(34.6% 0.008 308.229);
     --color-base-content: oklch(100% 0.183 76.89);
     --color-primary: oklch(100% 0 0);
     --color-primary-content: oklch(20% 0 0);
@@ -16,7 +17,7 @@
     --color-secondary-content: oklch(85.516% 0.012 261.069);
     --color-accent: oklch(36.674% 0.051 338.825);
     --color-accent-content: oklch(87.334% 0.01 338.825);
-    --color-neutral: oklch(15.9% 0.237 80.3);
+    --color-neutral: oklch(24.2% 0.054 80.3);
     --color-neutral-content: oklch(96.1% 0.089 90.861);
     --color-info: oklch(79.061% 0.121 237.133);
     --color-info-content: oklch(15.812% 0.024 237.133);
@@ -37,10 +38,10 @@
 }
 
 @plugin "daisyui/theme" {
-    name: "greed";
-    default: true;
+    name: "greedlight";
+    default: false;
     prefersdark: false;
-    color-scheme: "dark";
+    color-scheme: "light";
     --color-base-100: oklch(20.219% 0.004 308.229);
     --color-base-200: oklch(23.2% 0.008 308.229);
     --color-base-300: oklch(34.6% 0.008 308.229);
