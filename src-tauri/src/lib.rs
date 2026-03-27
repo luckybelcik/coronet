@@ -31,7 +31,9 @@ pub fn run() {
             get_project_names,
             load_project,
             get_block_names,
-            get_blocks_with_preview
+            get_blocks_with_preview,
+            load_manifest,
+            update_manifest_file
         ])
         .plugin(tauri_plugin_opener::init())
         .register_uri_scheme_protocol("engine-asset", move |app, request| {
@@ -153,6 +155,28 @@ fn get_blocks_with_preview(state: tauri::State<'_, EngineState>) -> Vec<(String,
             .collect()
     } else {
         Vec::new()
+    }
+}
+
+
+#[tauri::command]
+fn load_manifest(path: String) -> Result<String, String> {
+    let path = PathBuf::from(path);
+    if let Ok(manifest) = std::fs::read_to_string(path) {
+        Ok(manifest)
+    } else {
+        Err("Failed to load manifest".to_string())
+    }
+}
+
+#[tauri::command]
+fn update_manifest_file(contents: String, path: String) -> bool {
+    let path = PathBuf::from(path);
+    let result = std::fs::write(path, contents);
+    if let Ok(_) = result {
+        true
+    } else {
+        false
     }
 }
 

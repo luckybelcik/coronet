@@ -1,6 +1,8 @@
 <script lang="ts">
     import { invoke } from "@tauri-apps/api/core";
     import { onMount } from "svelte";
+    import { fileStore } from '../../lib/fileStore.svelte';
+    import { goto } from '$app/navigation';
 
     let raw_blocks: [string, number, number, string][] = [];
     let blocks: { name: string; id: number; atlas_id: number, manifest_path: string }[] = [];
@@ -15,110 +17,49 @@
         }));
     });
 
-    let leftWidth = 200;
-    let rightWidth = 200;
-
-    const startResizingLeft = (e: MouseEvent) => {
-        const onMouseMove = (moveEvent: MouseEvent) => {
-            if (moveEvent.clientX > 100 && moveEvent.clientX < 500) {
-                leftWidth = moveEvent.clientX;
-            }
-        };
-
-        const onMouseUp = () => {
-            window.removeEventListener("mousemove", onMouseMove);
-            window.removeEventListener("mouseup", onMouseUp);
-        };
-
-        window.addEventListener("mousemove", onMouseMove);
-        window.addEventListener("mouseup", onMouseUp);
-    };
-
-    const startResizingRight = (e: MouseEvent) => {
-        const onMouseMove = (moveEvent: MouseEvent) => {
-            const newWidth = window.innerWidth - moveEvent.clientX;
-            if (newWidth > 100 && newWidth < 500) {
-                rightWidth = newWidth;
-            }
-        };
-
-        const onMouseUp = () => {
-            window.removeEventListener("mousemove", onMouseMove);
-            window.removeEventListener("mouseup", onMouseUp);
-        };
-
-        window.addEventListener("mousemove", onMouseMove);
-        window.addEventListener("mouseup", onMouseUp);
+    async function loadManifest(path: string) {
+        try {
+            const contents: string = await invoke("load_manifest", { path });
+            fileStore.updateContentWithPath(contents, path);
+            goto('/main_editor/manifest_editing');
+        } catch (error) {
+            console.error(error);
+        }
     };
 </script>
 
-<div class="flex flex-row w-full h-full">
-    <div
-        class="h-full bg-base-200 select-none overflow-auto border border-base-content/40"
-        style="width: {leftWidth}px;"
-    >
-        <slot name="left" />
-    </div>
-
-    <button
-        class="w-4 -ml-2 cursor-col-resize h-full opacity-0 z-999"
-        aria-label="left-resizer"
-        on:mousedown={startResizingLeft}
-    ></button>
-
-    <div class="flex-1 mt-8 bg-base-100 select-none">
-        <div class="collapse collapse-arrow border border-base-content/20 mt-2">
-            <input type="checkbox" />
-            <div class="collapse-title">Blocks</div>
-            <div
-                class="grid gap-3 collapse-content"
-                style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));"
-            >
-                {#each blocks as block}
-                    <div
-                        class="p-2 border border-base-content/40 bg-base-200 rounded-xl flex"
-                    >
-                        <div
-                            class="absolute -m-2 w-10 h-10 border border-base-content/40 rounded-lg"
-                        ></div>
-                        <div
-                            class="w-16 h-16 ml-1 mt-1 rounded-sm"
-                            style="
-                                        background-image: url('engine-asset://blocks/{block.id -
-                                1}');
-                                        background-size: auto; /* Keep original scale */
-                                        background-position: -0px -0px;
-                                        image-rendering: pixelated;
-                                        width: 16px;
-                                        height: 16px;
-                                        transform: scale(2); /* Scale up so it's not tiny :3 */
-                                        transform-origin: center;
-                                    "
-                        ></div>
-                        <div class="ml-4.5">
-                            {block.name.split(":").pop()}
-                        </div>
-                        <div class="flex flex-2 justify-end">
-                            <div class="mt-1 text-xs opacity-30">
+<div class="flex-1 mt-8 bg-base-100 select-none">
+    <div class="collapse collapse-arrow border border-base-content/20 mt-2">
+        <input type="checkbox" />
+        <div class="collapse-title">Blocks</div>
+        <div
+            class="grid gap-3 collapse-content"
+            style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));"
+        >
+            {#each blocks as block}
+                <button
+                    class="relative border border-base-content/40 rounded-xl flex"
+                    onclick={() => loadManifest(block.manifest_path)}
+                >
+                    <div class="h-full w-18 rounded-xl z-9" style="background-image: url('engine-asset://blocks/{block.id - 1}'); background-size: 4.5rem; image-rendering: pixelated;">
+                    </div>
+                    <div class="p-2 z-2 flex-2">
+                        <div class="flex flex-col w-full p-2 bg-base-100 rounded-md">
+                            <div>
+                                {block.name.split(":").pop()}
+                            </div>
+                            <div class="text-xs opacity-50">
                                 {block.manifest_path.split("/").pop()}
                             </div>
                         </div>
                     </div>
-                {/each}
-            </div>
+                    <!-- svelte-ignore element_invalid_self_closing_tag -->
+                    <div 
+                        class="w-full h-full absolute left-0 bottom-0 opacity-30 rounded-xl"
+                        style="background-image: url('engine-asset://blocks/{block.id - 1}'); background-size: 32px; image-rendering: pixelated;"
+                    />
+                </button>
+            {/each}
         </div>
-    </div>
-
-    <button
-        class="w-4 -mr-2 cursor-col-resize h-full opacity-0 z-999"
-        aria-label="right-resizer"
-        on:mousedown={startResizingRight}
-    ></button>
-
-    <div
-        class="h-full bg-base-200 select-none overflow-auto border border-base-content/40"
-        style="width: {rightWidth}px;"
-    >
-        <slot name="right" />
     </div>
 </div>
