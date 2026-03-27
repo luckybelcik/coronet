@@ -31,13 +31,16 @@ jobs:
           node-version: lts/*
           cache: 'npm'
 
-      - name: Install Rust Stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust Nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly 
+          override: true 
 
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.platform }}-cargo
+          key: ${{ matrix.platform }}-cargo-nightly
 
       - name: Install Frontend Dependencies
         run: npm install
