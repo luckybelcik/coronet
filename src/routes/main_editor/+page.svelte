@@ -2,15 +2,16 @@
     import { invoke } from "@tauri-apps/api/core";
     import { onMount } from "svelte";
 
-    let raw_blocks: [string, number, number, number][] = [];
-    let blocks: { name: string; id: number; atlas_id: number }[] = [];
+    let raw_blocks: [string, number, number, string][] = [];
+    let blocks: { name: string; id: number; atlas_id: number, manifest_path: string }[] = [];
 
     onMount(async () => {
         raw_blocks = await invoke("get_blocks_with_preview");
-        blocks = raw_blocks.map(([name, id, atlas_id]) => ({
+        blocks = raw_blocks.map(([name, id, atlas_id, manifest_path]) => ({
             name,
             id,
             atlas_id,
+            manifest_path,
         }));
     });
 
@@ -96,6 +97,11 @@
                         ></div>
                         <div class="ml-4.5">
                             {block.name.split(":").pop()}
+                        </div>
+                        <div class="flex flex-2 justify-end">
+                            <div class="mt-1 text-xs opacity-30">
+                                {block.manifest_path.split("/").pop()}
+                            </div>
                         </div>
                     </div>
                 {/each}

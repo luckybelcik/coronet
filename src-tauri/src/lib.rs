@@ -1,7 +1,9 @@
+use engine_assets::engine_path::EnginePath;
 use engine_assets::{projects::Project, AssetManager};
 use engine_core::paths::init_data_path;
 use image::{DynamicImage, GenericImage, GenericImageView, ImageFormat, Rgba};
 use std::io::Cursor;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::Manager;
 
@@ -121,7 +123,7 @@ fn get_block_names(state: tauri::State<'_, EngineState>) -> Vec<String> {
 }
 
 #[tauri::command]
-fn get_blocks_with_preview(state: tauri::State<'_, EngineState>) -> Vec<(String, u16, u32)> {
+fn get_blocks_with_preview(state: tauri::State<'_, EngineState>) -> Vec<(String, u16, u32, String)> {
     let current = &state.current_project.lock().unwrap();
     if let Some(loaded_project) = current.as_ref() {
         let assets = &loaded_project.assets;
@@ -143,8 +145,10 @@ fn get_blocks_with_preview(state: tauri::State<'_, EngineState>) -> Vec<(String,
                     let offset = variant_data & 0x0FFFFFFF;
                     atlas_index = assets.texture_variant_mapping_table[offset as usize];
                 }
+                let manifest_engine_path = &assets.block_id_to_manifest_path[(**id) as usize];
+                let manifest_path = EnginePath::resolve(&manifest_engine_path, &assets.interner);
 
-                ((*name).clone(), (**id), atlas_index)
+                ((*name).clone(), (**id), atlas_index, manifest_path)
             })
             .collect()
     } else {
