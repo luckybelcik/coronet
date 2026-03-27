@@ -70,4 +70,6 @@
     </div>
 </div>
 
-{@render children()}
+<div class="w-full h-full absolute">
+    {@render children()}
+</div>
